@@ -33,7 +33,7 @@ protobuf {
 }
 
 // Manual end-to-end check against a real TV from a desktop:
-//   ./gradlew :atvremote:cli --args="192.168.100.2 pair"
+//   ./gradlew :atvremote:cli --args="<tv-ip> pair"
 tasks.register<JavaExec>("cli") {
     group = "verification"
     description = "Pairs with and sends commands to a real Android TV from the desktop."
