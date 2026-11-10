@@ -1,5 +1,6 @@
 package com.sudomastery.atv
 
+import com.sudomastery.atv.proto.RemoteProto.RemoteDirection
 import com.sudomastery.atv.proto.RemoteProto.RemoteKeyCode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +76,14 @@ fun main(args: Array<String>) = runBlocking {
                     val name = if (it.startsWith("KEYCODE_")) it else "KEYCODE_$it"
                     println("key $name -> ${remote.sendKey(RemoteKeyCode.valueOf(name))}")
                     delay(400)
+                }
+                "hold" -> {
+                    // hold <KEY> <ms>: key down, wait, key up
+                    val name = rest[0].let { if (it.startsWith("KEYCODE_")) it else "KEYCODE_$it" }
+                    val ms = rest.getOrNull(1)?.toLong() ?: 1500
+                    println("down -> ${remote.sendKey(RemoteKeyCode.valueOf(name), RemoteDirection.START_LONG)}")
+                    delay(ms)
+                    println("up -> ${remote.sendKey(RemoteKeyCode.valueOf(name), RemoteDirection.END_LONG)}")
                 }
                 "app" -> println("launch -> ${remote.launchApp(rest.first())}")
                 "text" -> println("text -> ${remote.sendText(rest.joinToString(" "))}")

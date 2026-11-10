@@ -33,13 +33,16 @@ import androidx.compose.material.icons.rounded.Input
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Tv
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -150,7 +153,7 @@ fun KeyboardSheet(onText: (String) -> Unit, onKey: (RemoteKey) -> Unit, onDismis
 
 /** Number pad plus the keys that don't fit on the main screen. */
 @Composable
-fun MoreKeysSheet(onKey: (RemoteKey) -> Unit, onDismiss: () -> Unit) {
+fun MoreKeysSheet(onKey: (RemoteKey) -> Unit, onPowerMenu: () -> Unit, onDismiss: () -> Unit) {
     RemoteSheet(onDismiss) {
         SheetTitle("More keys")
         val digits = RemoteKey.digits
@@ -187,6 +190,22 @@ fun MoreKeysSheet(onKey: (RemoteKey) -> Unit, onDismiss: () -> Unit) {
                 Triple(Icons.Rounded.Settings, "TV settings", RemoteKey.SETTINGS),
             ),
             onKey,
+        )
+        Spacer(Modifier.height(18.dp))
+        OutlinedButton(
+            onClick = onPowerMenu,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, Palette.pressed),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Palette.onSurface),
+        ) {
+            Icon(Icons.Rounded.PowerSettingsNew, null, tint = Palette.red)
+            Spacer(Modifier.width(10.dp))
+            Text("Shut down TV…", fontSize = 16.sp)
+        }
+        Text(
+            "Opens the TV's power off dialog. Same as holding the power button.",
+            color = Palette.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp),
         )
     }
 }
