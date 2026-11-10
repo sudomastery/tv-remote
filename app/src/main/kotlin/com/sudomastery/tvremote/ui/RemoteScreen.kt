@@ -40,6 +40,8 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.VolumeOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,6 +53,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -64,6 +67,7 @@ import com.sudomastery.atv.ConnectionStatus
 import com.sudomastery.atv.proto.RemoteProto.RemoteDirection
 import com.sudomastery.tvremote.RemoteKey
 import com.sudomastery.tvremote.RemoteViewModel
+import com.sudomastery.tvremote.ir.TclIr
 
 private enum class Sheet { NONE, KEYBOARD, MORE, DEVICES, SETTINGS }
 
@@ -75,12 +79,13 @@ fun RemoteScreen(vm: RemoteViewModel) {
     val pairing by vm.pairing.collectAsStateWithLifecycle()
     val haptics by vm.haptics.collectAsStateWithLifecycle()
     val listening by vm.listening.collectAsStateWithLifecycle()
+    val irMode by vm.irMode.collectAsStateWithLifecycle()
 
     var sheet by rememberSaveable { mutableStateOf(Sheet.NONE) }
     var touchpad by rememberSaveable { mutableStateOf(false) }
 
-    // First run: go straight to finding a TV.
-    LaunchedEffect(tvs.isEmpty()) { if (tvs.isEmpty()) sheet = Sheet.DEVICES }
+    // First run: go straight to finding a TV (unless the user only wants IR).
+    LaunchedEffect(tvs.isEmpty()) { if (tvs.isEmpty() && !irMode) sheet = Sheet.DEVICES }
 
     val press: (RemoteKey) -> Unit = { vm.press(it) }
 
@@ -93,21 +98,28 @@ fun RemoteScreen(vm: RemoteViewModel) {
                 .padding(horizontal = 20.dp),
         ) {
             Header(
-                name = current?.name ?: "No TV",
+                name = current?.name ?: if (irMode) "TCL TV" else "No TV",
                 status = tv.status,
                 isOn = tv.isOn,
+                irMode = irMode,
                 onSettings = { sheet = Sheet.SETTINGS },
                 onDevices = { sheet = Sheet.DEVICES },
                 onPower = { press(RemoteKey.POWER) },
             )
-            StatusBanner(
-                hasTv = current != null,
-                status = tv.status,
-                onFind = { sheet = Sheet.DEVICES },
-                onPair = vm::repairCurrent,
-            )
+            if (vm.irAvailable) {
+                ModeSwitch(irMode, vm::setIrMode, Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp))
+            }
+            if (!irMode) {
+                StatusBanner(
+                    hasTv = current != null,
+                    status = tv.status,
+                    onFind = { sheet = Sheet.DEVICES },
+                    onPair = vm::repairCurrent,
+                    onUseIr = if (vm.irAvailable) ({ vm.setIrMode(true) }) else null,
+                )
+            }
             Spacer(Modifier.height(12.dp))
-            AppRow(onLaunch = { vm.launch(it) })
+            AppRow(onLaunch = { vm.launch(it) }, isEnabled = { !irMode || it in TclIr.apps })
 
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 val side = minOf(maxWidth * 0.88f, maxHeight - 40.dp)
@@ -131,9 +143,10 @@ fun RemoteScreen(vm: RemoteViewModel) {
             }
 
             BottomControls(
-                volume = tv.volume?.level,
-                muted = tv.volume?.muted == true,
+                volume = tv.volume?.level.takeUnless { irMode },
+                muted = !irMode && tv.volume?.muted == true,
                 listening = listening,
+                irMode = irMode,
                 onKey = press,
                 onKeyboard = { sheet = Sheet.KEYBOARD },
                 onMore = { sheet = Sheet.MORE },
@@ -161,6 +174,14 @@ fun RemoteScreen(vm: RemoteViewModel) {
                 canRepair = current != null,
                 onRepair = { vm.repairCurrent(); sheet = Sheet.NONE },
                 onManageTvs = { sheet = Sheet.DEVICES },
+                extra = {
+                    SettingRow(
+                        "Infrared mode",
+                        if (vm.irAvailable) "Use the phone's IR blaster instead of Wi-Fi. Point the phone at the TV." else "This phone has no IR blaster",
+                    ) {
+                        Switch(irMode, vm::setIrMode, enabled = vm.irAvailable, colors = SwitchDefaults.colors(checkedTrackColor = Palette.violet))
+                    }
+                },
                 onDismiss = { sheet = Sheet.NONE },
             )
             Sheet.NONE -> Unit
@@ -188,6 +209,7 @@ private fun Header(
     name: String,
     status: ConnectionStatus,
     isOn: Boolean?,
+    irMode: Boolean,
     onSettings: () -> Unit,
     onDevices: () -> Unit,
     onPower: () -> Unit,
@@ -203,17 +225,17 @@ private fun Header(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(9.dp).clip(CircleShape).background(status.color()))
+                Box(Modifier.size(9.dp).clip(CircleShape).background(if (irMode) Palette.violet else status.color()))
                 Spacer(Modifier.width(8.dp))
                 Text(name, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Palette.onSurface)
                 Icon(Icons.Rounded.ArrowDropDown, "Choose TV", tint = Palette.onSurface)
             }
-            Text(status.label(), fontSize = 12.sp, color = Palette.muted)
+            Text(if (irMode) "Infrared · point at the TV" else status.label(), fontSize = 12.sp, color = Palette.muted)
         }
         RoundKey(
             Icons.Rounded.PowerSettingsNew, "Power",
             size = 48.dp,
-            tint = if (isOn == true) Palette.green else Palette.red,
+            tint = if (irMode) Palette.onSurface else if (isOn == true) Palette.green else Palette.red,
             background = Color.Transparent,
             onPress = onPower,
         )
@@ -238,12 +260,14 @@ private fun ConnectionStatus.label() = when (this) {
 }
 
 @Composable
-private fun StatusBanner(hasTv: Boolean, status: ConnectionStatus, onFind: () -> Unit, onPair: () -> Unit) {
+private fun StatusBanner(hasTv: Boolean, status: ConnectionStatus, onFind: () -> Unit, onPair: () -> Unit, onUseIr: (() -> Unit)?) {
     val content: Pair<String, Pair<String, () -> Unit>>? = when {
         !hasTv -> "No TV set up yet." to ("Find TV" to onFind)
         status == ConnectionStatus.NeedsPairing -> "The TV doesn't recognise this phone." to ("Pair" to onPair)
         status == ConnectionStatus.CertificateChanged -> "The TV's identity changed, so it needs to be paired again." to ("Pair" to onPair)
-        status is ConnectionStatus.Unreachable -> "Can't reach the TV. Is it on and on this Wi-Fi?" to ("TVs" to onFind)
+        status is ConnectionStatus.Unreachable ->
+            if (onUseIr != null) "Can't reach the TV over Wi-Fi." to ("Use IR" to onUseIr)
+            else "Can't reach the TV. Is it on and on this Wi-Fi?" to ("TVs" to onFind)
         else -> null
     }
     AnimatedVisibility(content != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
@@ -266,13 +290,20 @@ private fun StatusBanner(hasTv: Boolean, status: ConnectionStatus, onFind: () ->
 }
 
 @Composable
-private fun PadSwitch(touchpad: Boolean, onChange: (Boolean) -> Unit) {
+private fun PadSwitch(touchpad: Boolean, onChange: (Boolean) -> Unit) = Segmented(touchpad, "D-pad", "Touchpad", onChange)
+
+@Composable
+private fun ModeSwitch(ir: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) =
+    Segmented(ir, "Wi-Fi", "IR", onChange, modifier)
+
+@Composable
+private fun Segmented(second: Boolean, firstLabel: String, secondLabel: String, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     Row(
-        Modifier.clip(RoundedCornerShape(50)).background(Palette.surface).padding(3.dp),
+        modifier.clip(RoundedCornerShape(50)).background(Palette.surface).padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        listOf(false to "D-pad", true to "Touchpad").forEach { (value, label) ->
-            val selected = value == touchpad
+        listOf(false to firstLabel, true to secondLabel).forEach { (value, label) ->
+            val selected = value == second
             Text(
                 label,
                 fontSize = 13.sp,
@@ -293,6 +324,7 @@ private fun BottomControls(
     volume: Int?,
     muted: Boolean,
     listening: Boolean,
+    irMode: Boolean,
     onKey: (RemoteKey) -> Unit,
     onKeyboard: () -> Unit,
     onMore: () -> Unit,
@@ -308,13 +340,13 @@ private fun BottomControls(
             VolumeRocker(volume, muted, onUp = { onKey(RemoteKey.VOLUME_UP) }, onDown = { onKey(RemoteKey.VOLUME_DOWN) }, modifier = Modifier.width(rocker).fillMaxHeight())
             Column(Modifier.fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
                 Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    RoundKey(Icons.Rounded.Keyboard, "Keyboard", size = key, onPress = onKeyboard)
+                    RoundKey(Icons.Rounded.Keyboard, "Keyboard", size = key, enabled = !irMode, onPress = onKeyboard)
                     RoundKey(Icons.Rounded.Home, "Home", size = key) { onKey(RemoteKey.HOME) }
                     RoundKey(Icons.Rounded.Dialpad, "Number pad and more keys", size = key, onPress = onMore)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
                     RoundKey(Icons.Rounded.VolumeOff, "Mute", size = key, tint = if (muted) Palette.red else Palette.onSurface) { onKey(RemoteKey.MUTE) }
-                    MicKey(listening, key, onVoiceStart, onVoiceStop)
+                    MicKey(listening, key, enabled = !irMode, onVoiceStart, onVoiceStop)
                     RoundKey(Icons.AutoMirrored.Rounded.Undo, "Back", size = key) { onKey(RemoteKey.BACK) }
                 }
             }
@@ -325,7 +357,7 @@ private fun BottomControls(
 
 /** Hold to talk. Asks for the microphone the first time. */
 @Composable
-private fun MicKey(listening: Boolean, size: androidx.compose.ui.unit.Dp, onStart: () -> Unit, onStop: () -> Unit) {
+private fun MicKey(listening: Boolean, size: androidx.compose.ui.unit.Dp, enabled: Boolean, onStart: () -> Unit, onStop: () -> Unit) {
     val context = LocalContext.current
     val haptic = LocalHaptic.current
     val start by rememberUpdatedState(onStart)
@@ -335,6 +367,7 @@ private fun MicKey(listening: Boolean, size: androidx.compose.ui.unit.Dp, onStar
     Box(
         Modifier
             .size(size)
+            .alpha(if (enabled) 1f else DISABLED_ALPHA)
             .clip(CircleShape)
             .background(
                 when {
@@ -343,7 +376,7 @@ private fun MicKey(listening: Boolean, size: androidx.compose.ui.unit.Dp, onStar
                     else -> Palette.surface
                 },
             )
-            .remotePress(onPressedChange = { down ->
+            .then(if (!enabled) Modifier else Modifier.remotePress(onPressedChange = { down ->
                 pressed = down
                 if (down) {
                     haptic()
@@ -355,7 +388,7 @@ private fun MicKey(listening: Boolean, size: androidx.compose.ui.unit.Dp, onStar
                 } else {
                     stop()
                 }
-            }) {},
+            }) {}),
         contentAlignment = Alignment.Center,
     ) {
         Icon(Icons.Rounded.Mic, "Hold to talk", tint = Palette.onSurface, modifier = Modifier.size(size * 0.42f))

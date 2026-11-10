@@ -33,6 +33,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
@@ -62,6 +63,7 @@ import kotlin.math.hypot
 private const val REPEAT_DELAY_MS = 400L
 private const val REPEAT_INTERVAL_MS = 110L
 private const val LONG_PRESS_MS = 550L
+const val DISABLED_ALPHA = 0.3f
 
 /**
  * Press handling tuned for a remote: fires on touch-down (no waiting for release), auto-repeats
@@ -113,6 +115,7 @@ fun RoundKey(
     tint: Color = Palette.onSurface,
     background: Color = Palette.surface,
     repeat: Boolean = false,
+    enabled: Boolean = true,
     onPress: () -> Unit,
 ) {
     val haptic = LocalHaptic.current
@@ -123,9 +126,10 @@ fun RoundKey(
         modifier
             .size(size)
             .scale(scale)
+            .alpha(if (enabled) 1f else DISABLED_ALPHA)
             .clip(CircleShape)
             .background(if (pressed) Palette.pressed else background)
-            .remotePress(onPressedChange = { pressed = it }, repeat = repeat) { haptic(); action() },
+            .then(if (enabled) Modifier.remotePress(onPressedChange = { pressed = it }, repeat = repeat) { haptic(); action() } else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription, tint = tint, modifier = Modifier.size(size * 0.42f))
