@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "tv-remote"
 include(":atvremote")
+include(":app")
