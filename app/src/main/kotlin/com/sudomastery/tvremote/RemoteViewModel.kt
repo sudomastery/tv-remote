@@ -154,6 +154,47 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         return r?.sendKey(key.atv, direction) ?: false
     }
 
+    private val _powerMenuOpening = MutableStateFlow(false)
+    /** True while the app is holding the power key to open the TV's shut down dialog. */
+    val powerMenuOpening: StateFlow<Boolean> = _powerMenuOpening.asStateFlow()
+    private var powerHoldJob: Job? = null
+
+    /**
+     * Holds the power key like a physical remote, which opens the TV's "Power off" dialog
+     * (full shut down) instead of the normal sleep.
+     *
+     * The hold is a fixed [POWER_HOLD_MS] no matter when the finger lifts: on the TCL a 1.5 s
+     * hold opens the dialog, while 0.8 s counts as a normal press and puts the TV to sleep.
+     */
+    fun openPowerMenu() {
+        if (powerHoldJob?.isActive == true) return
+        val r = remote.value
+        val useIr = _irMode.value || (r?.isConnected != true && ir.available)
+        if (!useIr && r?.isConnected != true) return
+        powerHoldJob = viewModelScope.launch {
+            _powerMenuOpening.value = true
+            try {
+                if (useIr) {
+                    // TCL's IR format has no repeat code: a held button resends the full frame.
+                    val code = TclIr.keys.getValue(RemoteKey.POWER)
+                    val end = System.currentTimeMillis() + POWER_HOLD_MS
+                    while (System.currentTimeMillis() < end) {
+                        ir.send(code)
+                        delay(IR_REPEAT_MS)
+                    }
+                } else if (r!!.sendKey(RemoteKey.POWER.atv, RemoteDirection.START_LONG)) {
+                    try {
+                        delay(POWER_HOLD_MS)
+                    } finally {
+                        r.sendKey(RemoteKey.POWER.atv, RemoteDirection.END_LONG)
+                    }
+                }
+            } finally {
+                _powerMenuOpening.value = false
+            }
+        }
+    }
+
     fun launch(app: AppShortcut): Boolean {
         if (_irMode.value) return TclIr.apps[app]?.let(ir::send) ?: false
         return remote.value?.launchApp(app.link) ?: false
@@ -344,6 +385,9 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     // endregion
 }
+
+private const val POWER_HOLD_MS = 2_000L
+private const val IR_REPEAT_MS = 110L
 
 private fun Exception.friendlyMessage(): String = when (this) {
     is java.net.ConnectException, is java.net.SocketTimeoutException, is java.net.NoRouteToHostException ->
