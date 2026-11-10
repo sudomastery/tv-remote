@@ -22,10 +22,11 @@ class IrBlaster(context: Context) {
     // thread keeps presses in order.
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "ir").apply { isDaemon = true } }
 
-    fun send(tvKey: Int): Boolean {
+    fun send(tvKey: Int): Boolean = sendPattern(TclIr.pattern(tvKey))
+
+    fun sendPattern(pattern: IntArray): Boolean {
         val m = manager ?: return false
         if (!available) return false
-        val pattern = TclIr.pattern(tvKey)
         worker.execute { runCatching { m.transmit(TclIr.CARRIER_HZ, pattern) } }
         return true
     }

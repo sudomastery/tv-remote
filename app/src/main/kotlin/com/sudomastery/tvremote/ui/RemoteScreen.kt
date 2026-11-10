@@ -81,6 +81,7 @@ fun RemoteScreen(vm: RemoteViewModel) {
     val listening by vm.listening.collectAsStateWithLifecycle()
     val irMode by vm.irMode.collectAsStateWithLifecycle()
     val powerMenuOpening by vm.powerMenuOpening.collectAsStateWithLifecycle()
+    val notice by vm.notice.collectAsStateWithLifecycle()
 
     var sheet by rememberSaveable { mutableStateOf(Sheet.NONE) }
     var touchpad by rememberSaveable { mutableStateOf(false) }
@@ -104,10 +105,11 @@ fun RemoteScreen(vm: RemoteViewModel) {
                 isOn = tv.isOn,
                 irMode = irMode,
                 powerMenuOpening = powerMenuOpening,
+                notice = notice,
                 onSettings = { sheet = Sheet.SETTINGS },
                 onDevices = { sheet = Sheet.DEVICES },
                 onPower = { press(RemoteKey.POWER) },
-                onPowerHold = vm::openPowerMenu,
+                onPowerHold = { vm.openPowerMenu() },
             )
             if (vm.irAvailable) {
                 ModeSwitch(irMode, vm::setIrMode, Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp))
@@ -218,6 +220,7 @@ private fun Header(
     isOn: Boolean?,
     irMode: Boolean,
     powerMenuOpening: Boolean,
+    notice: String?,
     onSettings: () -> Unit,
     onDevices: () -> Unit,
     onPower: () -> Unit,
@@ -242,41 +245,24 @@ private fun Header(
             Text(
                 when {
                     powerMenuOpening -> "Opening power off menu…"
+                    notice != null -> notice
                     irMode -> "Infrared · point at the TV"
                     else -> status.label()
                 },
                 fontSize = 12.sp,
-                color = if (powerMenuOpening) Palette.amber else Palette.muted,
+                color = if (powerMenuOpening || notice != null) Palette.amber else Palette.muted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        PowerKey(
+        RoundKey(
+            Icons.Rounded.PowerSettingsNew, "Power. Hold for the power off menu",
+            size = 48.dp,
             tint = if (irMode) Palette.onSurface else if (isOn == true) Palette.green else Palette.red,
+            background = Color.Transparent,
+            onLongPress = onPowerHold,
             onPress = onPower,
-            onHold = onPowerHold,
         )
-    }
-}
-
-/** Tap: sleep / wake. Hold: the TV's power off dialog, like holding power on the real remote. */
-@Composable
-private fun PowerKey(tint: Color, onPress: () -> Unit, onHold: () -> Unit) {
-    val haptic = LocalHaptic.current
-    val tap by rememberUpdatedState(onPress)
-    val hold by rememberUpdatedState(onHold)
-    var pressed by remember { mutableStateOf(false) }
-    Box(
-        Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .background(if (pressed) Palette.pressed else Color.Transparent)
-            .remotePress(
-                onPressedChange = { pressed = it },
-                onLongStart = { haptic(); hold() },
-                onLongEnd = {},
-            ) { haptic(); tap() },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(Icons.Rounded.PowerSettingsNew, "Power. Hold for the power off menu", tint = tint, modifier = Modifier.size(26.dp))
     }
 }
 
