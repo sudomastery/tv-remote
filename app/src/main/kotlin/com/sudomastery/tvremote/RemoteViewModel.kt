@@ -140,6 +140,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Returns false if the command could not be delivered. */
     fun press(key: RemoteKey, direction: RemoteDirection = RemoteDirection.SHORT): Boolean {
+        // A power tap in the middle of a hold would arrive as a normal press and sleep the TV.
+        if (key == RemoteKey.POWER && powerHoldActive) return false
         if (_irMode.value) {
             // IR has no key-up, so a held OK is just a press.
             if (direction == RemoteDirection.END_LONG) return true
@@ -158,40 +160,89 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     /** True while the app is holding the power key to open the TV's shut down dialog. */
     val powerMenuOpening: StateFlow<Boolean> = _powerMenuOpening.asStateFlow()
     private var powerHoldJob: Job? = null
+    /** The connection holding the power key down over Wi-Fi, until it sends the key-up. */
+    private var heldRemote: AtvRemote? = null
+    private val powerHoldActive: Boolean get() = powerHoldJob?.isActive == true
 
     /**
      * Holds the power key like a physical remote, which opens the TV's "Power off" dialog
-     * (full shut down) instead of the normal sleep.
+     * (full shut down) instead of the normal sleep. Returns false if it couldn't start.
      *
-     * The hold is a fixed [POWER_HOLD_MS] no matter when the finger lifts: on the TCL a 1.5 s
-     * hold opens the dialog, while 0.8 s counts as a normal press and puts the TV to sleep.
+     * The hold has a fixed length no matter when the finger lifts: on the TCL a 1.5 s hold opens
+     * the dialog, while 0.8 s counts as a normal press and puts the TV to sleep.
      */
-    fun openPowerMenu() {
-        if (powerHoldJob?.isActive == true) return
+    fun openPowerMenu(): Boolean {
+        if (powerHoldActive) return true
+        if (_irMode.value) {
+            val held = TclIr.heldPattern(TclIr.keys.getValue(RemoteKey.POWER))
+            if (!ir.sendPattern(held)) {
+                showNotice("The IR blaster isn't available")
+                return false
+            }
+            powerHoldJob = viewModelScope.launch {
+                _powerMenuOpening.value = true
+                try {
+                    delay(TclIr.durationMs(held))
+                } finally {
+                    _powerMenuOpening.value = false
+                }
+            }
+            return true
+        }
+        // No IR fallback here, unlike a power tap: if Wi-Fi can't reach the TV it is most likely
+        // already off, and holding power over IR would switch it on instead.
         val r = remote.value
-        val useIr = _irMode.value || (r?.isConnected != true && ir.available)
-        if (!useIr && r?.isConnected != true) return
+        if (r == null || !r.isConnected) {
+            r?.connect()
+            showNotice(if (ir.available) "Not connected. Wait a moment or switch to IR." else "Not connected to the TV yet")
+            return false
+        }
+        if (!r.sendKey(RemoteKey.POWER.atv, RemoteDirection.START_LONG)) {
+            showNotice("Couldn't reach the TV")
+            return false
+        }
+        heldRemote = r
         powerHoldJob = viewModelScope.launch {
             _powerMenuOpening.value = true
             try {
-                if (useIr) {
-                    // TCL's IR format has no repeat code: a held button resends the full frame.
-                    val code = TclIr.keys.getValue(RemoteKey.POWER)
-                    val end = System.currentTimeMillis() + POWER_HOLD_MS
-                    while (System.currentTimeMillis() < end) {
-                        ir.send(code)
-                        delay(IR_REPEAT_MS)
-                    }
-                } else if (r!!.sendKey(RemoteKey.POWER.atv, RemoteDirection.START_LONG)) {
-                    try {
-                        delay(POWER_HOLD_MS)
-                    } finally {
-                        r.sendKey(RemoteKey.POWER.atv, RemoteDirection.END_LONG)
-                    }
-                }
+                delay(POWER_HOLD_MS)
             } finally {
+                releasePowerKey()
                 _powerMenuOpening.value = false
             }
+        }
+        return true
+    }
+
+    /** Key-up for a Wi-Fi power hold, only on the connection that pressed it. */
+    private fun releasePowerKey() {
+        val r = heldRemote ?: return
+        heldRemote = null
+        // sendKey on a dropped connection would reconnect it, so check first.
+        if (r.isConnected) r.sendKey(RemoteKey.POWER.atv, RemoteDirection.END_LONG)
+    }
+
+    /**
+     * Switching mode or TV mid-hold would cut the hold short, and a short hold sleeps the TV.
+     * It only lasts 2 seconds, so ask the user to wait instead.
+     */
+    private fun blockedByPowerHold(): Boolean {
+        if (!powerHoldActive) return false
+        showNotice("Opening the power off menu, one moment")
+        return true
+    }
+
+    private val _notice = MutableStateFlow<String?>(null)
+    /** A short message shown in the header for a few seconds. */
+    val notice: StateFlow<String?> = _notice.asStateFlow()
+    private var noticeJob: Job? = null
+
+    private fun showNotice(text: String) {
+        noticeJob?.cancel()
+        _notice.value = text
+        noticeJob = viewModelScope.launch {
+            delay(3_000)
+            _notice.value = null
         }
     }
 
@@ -201,6 +252,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setIrMode(enabled: Boolean) {
+        if (enabled == _irMode.value || blockedByPowerHold()) return
         val on = enabled && ir.available
         _irMode.value = on
         store.irMode = on
@@ -225,12 +277,14 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     fun select(tv: SavedTv) {
         if (_current.value?.host == tv.host && remote.value != null) return
+        if (blockedByPowerHold()) return
         _current.value = tv
         store.selectedHost = tv.host
         openRemote(tv)
     }
 
     fun forget(tv: SavedTv) {
+        if (_current.value?.host == tv.host && blockedByPowerHold()) return
         _tvs.value = _tvs.value.filterNot { it.host == tv.host }
         store.tvs = _tvs.value
         if (_current.value?.host == tv.host) {
@@ -282,6 +336,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 _tvs.value = _tvs.value.filterNot { it.host == tv.host } + tv
                 store.tvs = _tvs.value
                 _pairing.value = PairingState.Idle
+                powerHoldJob?.join() // let a running power hold finish on the old connection
                 remote.value?.disconnect()
                 remote.value = null
                 select(tv)
@@ -387,7 +442,6 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 private const val POWER_HOLD_MS = 2_000L
-private const val IR_REPEAT_MS = 110L
 
 private fun Exception.friendlyMessage(): String = when (this) {
     is java.net.ConnectException, is java.net.SocketTimeoutException, is java.net.NoRouteToHostException ->
