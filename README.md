@@ -26,6 +26,7 @@ To install it, open the APK on your phone and allow installs from that source wh
 |---|---|---|
 | D-pad with hold-to-repeat, touchpad, OK long-press | yes | yes |
 | Volume / channel rockers, mute, home, back, power | yes | yes |
+| Hold power for the TV's "Power off" (full shut down) dialog | yes | yes, untested |
 | Number pad, media keys, input, guide, info, captions | yes | yes |
 | Live volume level and power state | yes | no |
 | Type into TV text fields from the phone keyboard | yes | no |
@@ -33,6 +34,13 @@ To install it, open the APK on your phone and allow installs from that source wh
 | App shortcuts: Netflix, TizenTube, Prime Video, Spotify | all four | Netflix, Prime Video |
 
 When Wi-Fi can't reach the TV, the power button falls back to IR automatically, so it can still turn the TV on.
+
+### Power button
+
+- **Tap**: sleep or wake, like a normal press.
+- **Hold**: opens the TV's "Power off: Do you want to shut down?" dialog for a full shut down. Also available as **Shut down TV…** in the More keys sheet.
+
+The app holds the key for a fixed 2 seconds once a long-press is detected, however quickly you let go. On the TCL a 1.5 s hold opens the dialog, while 0.8 s counts as a normal press and puts the TV to sleep, so a short hold is not safe.
 
 ### App shortcuts
 
@@ -97,4 +105,4 @@ If the TV stops accepting the phone (for example after a factory reset), use **S
 
 ## Credits
 
-Protocol definitions (`polo.proto`, `remotemessage.proto`) and protocol behaviour come from [tronikos/androidtvremote2](https://github.com/tronikos/androidtvremote2) (Apache-2.0, license included next to the proto files), which builds on Google's pairing protocol and [louis49/androidtv-remote](https://github.com/louis49/androidtv-remote). IR timings come from [Flipper Zero firmware](https://github.com/flipperdevices/flipperzero-firmware), and reference captures from [Flipper-IRDB](https://github.com/Lucaslhm/Flipper-IRDB).
+Protocol definitions (`polo.proto`, `remotemessage.proto`) and protocol behaviour come from [tronikos/androidtvremote2](https://github.com/tronikos/androidtvremote2) (Apache-2.0, license included next to the proto files), which builds on Google's pairing protocol and [louis49/androidtv-remote](https://github.com/louis49/androidtv-remote). The TizenTube button uses TizenTube's own launcher icon, from [reisxd/TizenTube](https://github.com/reisxd/TizenTube) (GPL-3.0). IR timings come from [Flipper Zero firmware](https://github.com/flipperdevices/flipperzero-firmware), and reference captures from [Flipper-IRDB](https://github.com/Lucaslhm/Flipper-IRDB).

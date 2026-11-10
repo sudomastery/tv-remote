@@ -3,6 +3,7 @@ package com.sudomastery.tvremote.ui
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,14 +31,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sudomastery.tvremote.AppShortcut
+import com.sudomastery.tvremote.R
 
 @Composable
 fun AppRow(onLaunch: (AppShortcut) -> Unit, modifier: Modifier = Modifier, isEnabled: (AppShortcut) -> Boolean = { true }) {
@@ -68,7 +71,7 @@ private fun AppTile(app: AppShortcut, enabled: Boolean, onClick: () -> Unit, mod
     }
 }
 
-/** Simple brand-coloured glyphs drawn in code, so the APK carries no image assets. */
+/** Brand-coloured glyphs drawn in code, plus TizenTube's own icon (a single 8 KB WebP). */
 @Composable
 private fun AppGlyph(app: AppShortcut) {
     when (app) {
@@ -76,24 +79,13 @@ private fun AppGlyph(app: AppShortcut) {
             Text("N", color = Color(0xFFE50914), fontSize = 40.sp, fontWeight = FontWeight.Black)
         }
 
-        AppShortcut.TIZENTUBE -> Box(Modifier.fillMaxSize().background(Color(0xFF1A1A1A)), Alignment.Center) {
-            Canvas(Modifier.fillMaxSize()) {
-                val w = size.width * 0.62f
-                val h = w * 0.7f
-                val left = (size.width - w) / 2
-                val top = (size.height - h) / 2
-                drawRoundRect(Color(0xFFFF0033), Offset(left, top), Size(w, h), androidx.compose.ui.geometry.CornerRadius(h * 0.28f))
-                val t = h * 0.42f
-                val cx = size.width / 2 + t * 0.12f
-                val cy = size.height / 2
-                drawPath(Path().apply {
-                    moveTo(cx - t * 0.45f, cy - t / 2)
-                    lineTo(cx + t * 0.55f, cy)
-                    lineTo(cx - t * 0.45f, cy + t / 2)
-                    close()
-                }, Color.White)
-            }
-        }
+        // TizenTube's own launcher icon (from io.gh.reisxd.tizentube.cobalt), not the YouTube logo.
+        AppShortcut.TIZENTUBE -> Image(
+            painterResource(R.drawable.tizentube_icon),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
 
         AppShortcut.PRIME -> Box(
             Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF1A98FF), Color(0xFF0F6FD1)))),
