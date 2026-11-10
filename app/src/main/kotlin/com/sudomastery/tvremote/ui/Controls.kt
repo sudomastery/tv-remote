@@ -116,10 +116,12 @@ fun RoundKey(
     background: Color = Palette.surface,
     repeat: Boolean = false,
     enabled: Boolean = true,
+    onLongPress: (() -> Unit)? = null,
     onPress: () -> Unit,
 ) {
     val haptic = LocalHaptic.current
     val action by rememberUpdatedState(onPress)
+    val longAction by rememberUpdatedState(onLongPress)
     var pressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (pressed) 0.92f else 1f, tween(90), label = "press")
     Box(
@@ -129,7 +131,17 @@ fun RoundKey(
             .alpha(if (enabled) 1f else DISABLED_ALPHA)
             .clip(CircleShape)
             .background(if (pressed) Palette.pressed else background)
-            .then(if (enabled) Modifier.remotePress(onPressedChange = { pressed = it }, repeat = repeat) { haptic(); action() } else Modifier),
+            .then(
+                if (!enabled) {
+                    Modifier
+                } else {
+                    Modifier.remotePress(
+                        onPressedChange = { pressed = it },
+                        repeat = repeat,
+                        onLongStart = if (onLongPress != null) ({ haptic(); longAction?.invoke() }) else null,
+                    ) { haptic(); action() }
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription, tint = tint, modifier = Modifier.size(size * 0.42f))

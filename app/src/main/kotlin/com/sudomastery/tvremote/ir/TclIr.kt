@@ -85,6 +85,20 @@ object TclIr {
         return bits
     }
 
+    /**
+     * The key held down: the full frame repeated back to back (TCL's IR format has no repeat
+     * code), as one pattern so the timing doesn't depend on the phone's IR driver.
+     * [maxMicros] stays under ConsumerIrManager's 2 second limit.
+     */
+    fun heldPattern(tvKey: Int, maxMicros: Int = 1_900_000): IntArray {
+        val frame = pattern(tvKey)
+        val repeats = maxOf(1, maxMicros / frame.sum())
+        return IntArray(frame.size * repeats) { frame[it % frame.size] }
+    }
+
+    /** How long a pattern takes to transmit. */
+    fun durationMs(pattern: IntArray): Long = pattern.sumOf { it.toLong() } / 1000
+
     /** On/off durations in microseconds, starting with "on", for ConsumerIrManager.transmit. */
     fun pattern(tvKey: Int): IntArray {
         val out = ArrayList<Int>(52)

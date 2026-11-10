@@ -73,17 +73,21 @@ fun main(args: Array<String>) = runBlocking {
             val rest = args.drop(2)
             when (args[1]) {
                 "key" -> rest.forEach {
-                    val name = if (it.startsWith("KEYCODE_")) it else "KEYCODE_$it"
-                    println("key $name -> ${remote.sendKey(RemoteKeyCode.valueOf(name))}")
+                    val key = keyCode(it)
+                    println(if (key == null) "unknown key $it" else "key $key -> ${remote.sendKey(key)}")
                     delay(400)
                 }
                 "hold" -> {
-                    // hold <KEY> <ms>: key down, wait, key up
-                    val name = rest[0].let { if (it.startsWith("KEYCODE_")) it else "KEYCODE_$it" }
-                    val ms = rest.getOrNull(1)?.toLong() ?: 1500
-                    println("down -> ${remote.sendKey(RemoteKeyCode.valueOf(name), RemoteDirection.START_LONG)}")
-                    delay(ms)
-                    println("up -> ${remote.sendKey(RemoteKeyCode.valueOf(name), RemoteDirection.END_LONG)}")
+                    // hold <KEY> [ms]: key down, wait, key up
+                    val key = rest.getOrNull(0)?.let(::keyCode)
+                    val ms = rest.getOrNull(1)?.let { it.toLongOrNull() ?: -1 } ?: 1500
+                    if (key == null || ms !in 1..10_000) {
+                        println("usage: hold <KEY> [milliseconds 1-10000], e.g. hold POWER 1500")
+                    } else {
+                        println("down -> ${remote.sendKey(key, RemoteDirection.START_LONG)}")
+                        delay(ms)
+                        println("up -> ${remote.sendKey(key, RemoteDirection.END_LONG)}")
+                    }
                 }
                 "app" -> println("launch -> ${remote.launchApp(rest.first())}")
                 "text" -> println("text -> ${remote.sendText(rest.joinToString(" "))}")
@@ -93,4 +97,10 @@ fun main(args: Array<String>) = runBlocking {
             remote.disconnect()
         }
     }
+}
+
+/** Accepts "POWER", "power" or "KEYCODE_POWER". */
+private fun keyCode(name: String): RemoteKeyCode? {
+    val full = name.uppercase().let { if (it.startsWith("KEYCODE_")) it else "KEYCODE_$it" }
+    return runCatching { RemoteKeyCode.valueOf(full) }.getOrNull()
 }

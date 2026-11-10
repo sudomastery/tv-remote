@@ -66,6 +66,18 @@ class TclIrTest {
     }
 
     @Test
+    fun `held power is repeated whole frames lasting long enough to open the power off dialog`() {
+        val frame = TclIr.pattern(TclIr.keys.getValue(RemoteKey.POWER))
+        val held = TclIr.heldPattern(TclIr.keys.getValue(RemoteKey.POWER))
+        assertEquals(0, held.size % frame.size)
+        held.toList().chunked(frame.size).forEach { assertArrayEquals(frame, it.toIntArray()) }
+        val micros = held.sum()
+        // On the TCL a 1.5 s hold opens the dialog; ConsumerIrManager refuses patterns of 2 s or more.
+        assertTrue("held for $micros us", micros in 1_500_000 until 2_000_000)
+        assertEquals(micros / 1000L, TclIr.durationMs(held))
+    }
+
+    @Test
     fun `TizenTube is never sent to the stock YouTube IR button`() {
         assertTrue(AppShortcut.TIZENTUBE !in TclIr.apps)
     }
