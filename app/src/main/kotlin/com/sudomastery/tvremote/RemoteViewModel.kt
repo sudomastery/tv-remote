@@ -19,6 +19,8 @@ import com.sudomastery.tvremote.data.Discovery
 import com.sudomastery.tvremote.data.FoundTv
 import com.sudomastery.tvremote.data.SavedTv
 import com.sudomastery.tvremote.data.Store
+import com.sudomastery.tvremote.ir.IrBlaster
+import com.sudomastery.tvremote.ir.TclIr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -55,6 +57,14 @@ sealed interface PairingState {
 class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
     private val discovery = Discovery(app)
+    private val ir = IrBlaster(app)
+
+    /** Whether this phone has an IR emitter at all. */
+    val irAvailable: Boolean = ir.available
+
+    private val _irMode = MutableStateFlow(store.irMode && ir.available)
+    /** Send everything over infrared instead of Wi-Fi. */
+    val irMode: StateFlow<Boolean> = _irMode.asStateFlow()
 
     private var identity: ClientIdentity? = null
     private val identityReady = MutableStateFlow(false)
@@ -68,7 +78,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     private val remote = MutableStateFlow<AtvRemote?>(null)
 
     val tvState: StateFlow<TvState> = remote.flatMapLatest { r ->
-        if (r == null) flowOf(TvState()) else combine(r.status, r.volume, r.isOn, r.voiceAvailable) { s, v, on, voice ->
+        // Before the identity loads there is no remote yet; show "Connecting" rather than "Not connected".
+        if (r == null) flowOf(TvState(if (_current.value != null && !_irMode.value) ConnectionStatus.Connecting else ConnectionStatus.Disconnected)) else combine(r.status, r.volume, r.isOn, r.voiceAvailable) { s, v, on, voice ->
             TvState(s, v, on, voice)
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TvState())
@@ -104,7 +115,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     fun onForeground() {
         foreground = true
         backgroundJob?.cancel()
-        remote.value?.connect()
+        if (!_irMode.value) remote.value?.connect()
     }
 
     /** Keep the link warm for a short while so quick app switches reconnect instantly. */
@@ -129,11 +140,36 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Returns false if the command could not be delivered. */
     fun press(key: RemoteKey, direction: RemoteDirection = RemoteDirection.SHORT): Boolean {
-        val r = remote.value ?: return false
-        return r.sendKey(key.atv, direction)
+        if (_irMode.value) {
+            // IR has no key-up, so a held OK is just a press.
+            if (direction == RemoteDirection.END_LONG) return true
+            return TclIr.keys[key]?.let(ir::send) ?: false
+        }
+        val r = remote.value
+        // A TV in deep standby drops off Wi-Fi; IR can still switch it on.
+        if (key == RemoteKey.POWER && r?.isConnected != true && ir.available) {
+            r?.connect()
+            return ir.send(TclIr.keys.getValue(RemoteKey.POWER))
+        }
+        return r?.sendKey(key.atv, direction) ?: false
     }
 
-    fun launch(app: AppShortcut) = remote.value?.launchApp(app.link) ?: false
+    fun launch(app: AppShortcut): Boolean {
+        if (_irMode.value) return TclIr.apps[app]?.let(ir::send) ?: false
+        return remote.value?.launchApp(app.link) ?: false
+    }
+
+    fun setIrMode(enabled: Boolean) {
+        val on = enabled && ir.available
+        _irMode.value = on
+        store.irMode = on
+        if (on) {
+            stopVoice()
+            remote.value?.disconnect()
+        } else if (foreground) {
+            remote.value?.connect()
+        }
+    }
 
     fun sendText(text: String) = remote.value?.sendText(text) ?: false
 
@@ -230,7 +266,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         remote.value?.disconnect()
         val r = AtvRemote(tv.host, id, tv.pinSha256, viewModelScope)
         remote.value = r
-        if (foreground) r.connect()
+        if (foreground && !_irMode.value) r.connect()
     }
 
     // endregion

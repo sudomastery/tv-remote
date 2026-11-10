@@ -23,6 +23,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
@@ -39,28 +40,28 @@ import androidx.compose.ui.unit.sp
 import com.sudomastery.tvremote.AppShortcut
 
 @Composable
-fun AppRow(onLaunch: (AppShortcut) -> Unit, modifier: Modifier = Modifier) {
+fun AppRow(onLaunch: (AppShortcut) -> Unit, modifier: Modifier = Modifier, isEnabled: (AppShortcut) -> Boolean = { true }) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         AppShortcut.entries.forEach { app ->
-            AppTile(app, onClick = { onLaunch(app) }, modifier = Modifier.weight(1f))
+            AppTile(app, isEnabled(app), onClick = { onLaunch(app) }, modifier = Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-private fun AppTile(app: AppShortcut, onClick: () -> Unit, modifier: Modifier) {
+private fun AppTile(app: AppShortcut, enabled: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val haptic = LocalHaptic.current
     val action by rememberUpdatedState(onClick)
     var pressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (pressed) 0.93f else 1f, tween(90), label = "tile")
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier.alpha(if (enabled) 1f else DISABLED_ALPHA), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .scale(scale)
                 .clip(RoundedCornerShape(18.dp))
-                .remotePress(onPressedChange = { pressed = it }) { haptic(); action() },
+                .then(if (enabled) Modifier.remotePress(onPressedChange = { pressed = it }) { haptic(); action() } else Modifier),
         ) { AppGlyph(app) }
         Spacer(Modifier.height(6.dp))
         Text(app.label, color = Palette.onSurface, fontSize = 13.sp, maxLines = 1, textAlign = TextAlign.Center)
