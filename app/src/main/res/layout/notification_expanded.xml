@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- D-pad cross with back in the bottom left corner, like the physical remote. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:paddingTop="2dp"
+    android:paddingBottom="6dp">
+
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal">
+        <FrameLayout android:layout_width="50dp" android:layout_height="50dp" />
+        <ImageButton android:id="@+id/n_up" style="@style/NotifButton" android:src="@drawable/ic_n_up" android:contentDescription="Up" />
+        <FrameLayout android:layout_width="50dp" android:layout_height="50dp" />
+    </LinearLayout>
+
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal">
+        <ImageButton android:id="@+id/n_left" style="@style/NotifButton" android:src="@drawable/ic_n_left" android:contentDescription="Left" />
+        <TextView android:id="@+id/n_ok" style="@style/NotifOk" android:layout_width="46dp" android:layout_height="46dp" android:layout_margin="2dp" android:textSize="15sp" />
+        <ImageButton android:id="@+id/n_right" style="@style/NotifButton" android:src="@drawable/ic_n_right" android:contentDescription="Right" />
+    </LinearLayout>
+
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal">
+        <ImageButton android:id="@+id/n_back" style="@style/NotifButton" android:src="@drawable/ic_n_back" android:contentDescription="Back" />
+        <ImageButton android:id="@+id/n_down" style="@style/NotifButton" android:src="@drawable/ic_n_down" android:contentDescription="Down" />
+        <FrameLayout android:layout_width="50dp" android:layout_height="50dp" />
+    </LinearLayout>
+</LinearLayout>

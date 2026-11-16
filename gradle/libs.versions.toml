@@ -11,6 +11,7 @@ compose-ui = "1.9.2"
 material3 = "1.4.0"
 material-icons = "1.7.8"
 junit = "4.13.2"
+dadb = "1.2.10"
 
 [libraries]
 protobuf-javalite = { module = "com.google.protobuf:protobuf-javalite", version.ref = "protobuf" }
@@ -27,6 +28,7 @@ compose-material3 = { module = "androidx.compose.material3:material3", version.r
 compose-material-icons = { module = "androidx.compose.material:material-icons-extended", version.ref = "material-icons" }
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "compose-ui" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "compose-ui" }
+dadb = { module = "dev.mobile:dadb", version.ref = "dadb" }
 junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]

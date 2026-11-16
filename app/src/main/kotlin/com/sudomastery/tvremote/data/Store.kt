@@ -54,6 +54,10 @@ class Store(context: Context) {
         get() = prefs.getBoolean(KEY_IR, false)
         set(value) = prefs.edit().putBoolean(KEY_IR, value).apply()
 
+    var notificationControls: Boolean
+        get() = prefs.getBoolean(KEY_NOTIFICATION, false)
+        set(value) = prefs.edit().putBoolean(KEY_NOTIFICATION, value).apply()
+
     var haptics: Boolean
         get() = prefs.getBoolean(KEY_HAPTICS, true)
         set(value) = prefs.edit().putBoolean(KEY_HAPTICS, value).apply()
@@ -68,5 +72,6 @@ class Store(context: Context) {
         const val KEY_SELECTED = "selected"
         const val KEY_HAPTICS = "haptics"
         const val KEY_IR = "ir_mode"
+        const val KEY_NOTIFICATION = "notification_controls"
     }
 }

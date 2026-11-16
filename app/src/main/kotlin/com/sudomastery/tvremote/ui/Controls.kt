@@ -323,62 +323,6 @@ private fun hitTest(p: Offset, size: Size): PadKey? {
     }
 }
 
-/**
- * Swipe surface: every ~[stepDp] of travel moves focus one step in that direction, a tap is OK.
- */
-@Composable
-fun Touchpad(onKey: (PadKey) -> Unit, modifier: Modifier = Modifier, stepDp: Dp = 44.dp) {
-    val haptic = LocalHaptic.current
-    val keyAction by rememberUpdatedState(onKey)
-    var active by remember { mutableStateOf(false) }
-    Box(
-        modifier
-            .clip(RoundedCornerShape(36.dp))
-            .background(if (active) Palette.surfaceHigh else Palette.surface)
-            .border(1.5.dp, Palette.accent, RoundedCornerShape(36.dp))
-            .pointerInput(Unit) {
-                val step = stepDp.toPx()
-                val slop = viewConfiguration.touchSlop
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false).consume()
-                    active = true
-                    var accX = 0f
-                    var accY = 0f
-                    var moved = false
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull() ?: break
-                        if (!change.pressed) break
-                        val delta = change.positionChange()
-                        change.consume()
-                        accX += delta.x
-                        accY += delta.y
-                        if (!moved && hypot(accX, accY) > slop) moved = true
-                        // Emit along the dominant axis only, so diagonal swipes don't zig-zag.
-                        while (abs(accX) >= step && abs(accX) >= abs(accY)) {
-                            keyAction(if (accX > 0) PadKey.RIGHT else PadKey.LEFT)
-                            haptic()
-                            accX -= step * if (accX > 0) 1 else -1
-                        }
-                        while (abs(accY) >= step && abs(accY) > abs(accX)) {
-                            keyAction(if (accY > 0) PadKey.DOWN else PadKey.UP)
-                            haptic()
-                            accY -= step * if (accY > 0) 1 else -1
-                        }
-                    }
-                    if (!moved) {
-                        haptic()
-                        keyAction(PadKey.OK)
-                    }
-                    active = false
-                }
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("Swipe to move · tap to select", color = Palette.muted, fontSize = 14.sp)
-    }
-}
-
 /** waitForUpOrCancellation that also consumes moves, so a parent never steals the gesture. */
 private suspend fun AwaitPointerEventScope.waitForUpConsuming(): PointerInputChange? {
     while (true) {

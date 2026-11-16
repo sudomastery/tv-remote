@@ -14,9 +14,26 @@ class IrBlaster(context: Context) {
             null
         }
 
-    val available: Boolean = runCatching {
-        manager?.hasIrEmitter() == true && supportsCarrier(TclIr.CARRIER_HZ)
-    }.getOrDefault(false)
+    /**
+     * True when the phone reports an IR emitter. The carrier range is deliberately not part of
+     * this check: some phones report ranges oddly, and a strict check would silently turn IR off.
+     */
+    val available: Boolean = runCatching { manager?.hasIrEmitter() == true }.getOrDefault(false)
+
+    /** Human readable emitter details for the settings screen. */
+    val description: String = when {
+        !available -> "No IR blaster found on this phone"
+        else -> {
+            val ranges = runCatching { manager?.carrierFrequencies }.getOrNull().orEmpty()
+            val khz = ranges.joinToString(", ") { "${it.minFrequency / 1000}-${it.maxFrequency / 1000} kHz" }
+            val fits = ranges.isEmpty() || ranges.any { TclIr.CARRIER_HZ in it.minFrequency..it.maxFrequency }
+            buildString {
+                append("IR blaster found")
+                if (khz.isNotEmpty()) append(" ($khz)")
+                if (!fits) append(". TCL uses 38 kHz, outside its reported range")
+            }
+        }
+    }
 
     // transmit() blocks until the signal has been sent, so keep it off the main thread. One
     // thread keeps presses in order.
@@ -31,8 +48,4 @@ class IrBlaster(context: Context) {
         return true
     }
 
-    private fun supportsCarrier(hz: Int): Boolean {
-        val ranges = manager?.carrierFrequencies ?: return true // unknown: try anyway
-        return ranges.isEmpty() || ranges.any { hz in it.minFrequency..it.maxFrequency }
-    }
 }
