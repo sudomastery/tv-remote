@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One row: back, left, up, OK, down, right. Equal-width cells so the row fits the narrow
+     collapsed area (about 220dp on Android 12+) as well as wide screens. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="44dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <FrameLayout style="@style/NotifCell"><ImageButton android:id="@+id/n_back" style="@style/NotifButtonSmall" android:src="@drawable/ic_n_back" android:contentDescription="Back" /></FrameLayout>
+    <FrameLayout style="@style/NotifCell"><ImageButton android:id="@+id/n_left" style="@style/NotifButtonSmall" android:src="@drawable/ic_n_left" android:contentDescription="Left" /></FrameLayout>
+    <FrameLayout style="@style/NotifCell"><ImageButton android:id="@+id/n_up" style="@style/NotifButtonSmall" android:src="@drawable/ic_n_up" android:contentDescription="Up" /></FrameLayout>
+    <FrameLayout style="@style/NotifCell"><TextView android:id="@+id/n_ok" style="@style/NotifOk" android:layout_width="36dp" android:layout_height="36dp" android:layout_gravity="center" android:textSize="12sp" /></FrameLayout>
+    <FrameLayout style="@style/NotifCell"><ImageButton android:id="@+id/n_down" style="@style/NotifButtonSmall" android:src="@drawable/ic_n_down" android:contentDescription="Down" /></FrameLayout>
+    <FrameLayout style="@style/NotifCell"><ImageButton android:id="@+id/n_right" style="@style/NotifButtonSmall" android:src="@drawable/ic_n_right" android:contentDescription="Right" /></FrameLayout>
+</LinearLayout>

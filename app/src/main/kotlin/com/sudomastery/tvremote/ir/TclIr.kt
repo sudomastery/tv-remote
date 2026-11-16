@@ -10,20 +10,23 @@ import com.sudomastery.tvremote.RemoteKey
  * Key codes are copied from the TV itself (`/vendor/tvconfig/config/ir_config.ini`, section
  * `KIR_ChinaMobile_Keymap`, protocol 0x07, header 0x000F). The TV lists each key by the byte it
  * decodes, which is the complement of the command byte sent first; [frameBits] accounts for that.
- * Timings match Flipper Zero's RCA encoder, and the bit layout is checked against Flipper-IRDB
- * captures of TCL remotes in the unit tests.
+ * Timings follow the RCA-38 definition that IRDB lists for TCL TVs. The unit tests check the
+ * bits against two independent sources: Flipper-IRDB captures of TCL remotes and the IRDB TCL
+ * code list.
  */
 object TclIr {
-    /** Flipper sends RCA on its common 38 kHz carrier, which TCL receivers accept. */
+    /** RCA-38: TCL remotes use a 38 kHz carrier (38.7 kHz nominal), not RCA's original 56 kHz. */
     const val CARRIER_HZ = 38_000
 
     private const val ADDRESS = 0xF
-    private const val HEADER_MARK = 4000
-    private const val HEADER_SPACE = 4000
-    private const val BIT_MARK = 500
-    private const val ONE_SPACE = 2000
-    private const val ZERO_SPACE = 1000
-    private const val TRAILING_GAP = 8000
+    // RCA-38 as defined for TCL in IRDB / IrpMaster: {38.7k,460,msb}<1,-2|1,-4>(8,-8,D:4,F:8,~D:4,~F:8,1,-16)
+    private const val UNIT = 460
+    private const val HEADER_MARK = 8 * UNIT
+    private const val HEADER_SPACE = 8 * UNIT
+    private const val BIT_MARK = UNIT
+    private const val ZERO_SPACE = 2 * UNIT
+    private const val ONE_SPACE = 4 * UNIT
+    private const val TRAILING_GAP = 16 * UNIT
 
     /** Remote key to the code in the TV's keymap. */
     val keys: Map<RemoteKey, Int> = mapOf(
@@ -94,6 +97,16 @@ object TclIr {
         val frame = pattern(tvKey)
         val repeats = maxOf(1, maxMicros / frame.sum())
         return IntArray(frame.size * repeats) { frame[it % frame.size] }
+    }
+
+    /**
+     * A quick press: [frames] back to back, like a physical remote tapped briefly. Still one
+     * press to the TV (repeats are treated as the key being held), but more likely to be caught
+     * from across the room than a single frame.
+     */
+    fun tapPattern(tvKey: Int, frames: Int = 2): IntArray {
+        val frame = pattern(tvKey)
+        return IntArray(frame.size * frames) { frame[it % frame.size] }
     }
 
     /** How long a pattern takes to transmit. */
