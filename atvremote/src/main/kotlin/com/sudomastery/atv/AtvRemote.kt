@@ -110,6 +110,15 @@ class AtvRemote(
 
     val isConnected: Boolean get() = _status.value == ConnectionStatus.Connected
 
+    @Volatile private var lastReceivedAt = 0L
+
+    /**
+     * Connected and recently heard from. The TV pings every 5 s, so a quiet link means it has
+     * gone (for example switched off into deep standby) even if the socket hasn't noticed yet,
+     * which can take up to the 16 s idle timeout.
+     */
+    val isLive: Boolean get() = isConnected && System.nanoTime() - lastReceivedAt < LIVE_WINDOW_NS
+
     /** Starts (or keeps) the connection loop. Cheap to call repeatedly. */
     @Synchronized
     fun connect() {
@@ -194,7 +203,11 @@ class AtvRemote(
             try {
                 val s = Tls.connect(host, port, identity, trust)
                 socket = s
-                runSession(s) { receivedAny = true; failures = 0 }
+                runSession(s) {
+                    receivedAny = true
+                    failures = 0
+                    lastReceivedAt = System.nanoTime()
+                }
                 // Clean EOF before the TV said anything: it dropped us, most likely an unknown certificate.
                 if (!receivedAny) {
                     _status.value = ConnectionStatus.NeedsPairing
@@ -327,6 +340,7 @@ class AtvRemote(
     companion object {
         const val REMOTE_PORT = 6466
         private const val IDLE_TIMEOUT_MS = 16_000
+        private const val LIVE_WINDOW_NS = 7_000_000_000L
         private const val VOICE_START_TIMEOUT_MS = 2_000L
         private const val VOICE_CHUNK_SIZE = 20 * 1024
         private const val VOICE_CHUNK_MIN_SIZE = 8 * 1024

@@ -27,13 +27,14 @@ To install it, open the APK on your phone and allow installs from that source wh
 | D-pad with hold-to-repeat, touchpad, OK long-press | yes | yes |
 | Volume / channel rockers, mute, home, back, power | yes | yes |
 | Hold power for the TV's "Power off" (full shut down) dialog | yes | yes, untested |
+| Back, arrows and OK in the notification shade | yes | yes |
 | Number pad, media keys, input, guide, info, captions | yes | yes |
 | Live volume level and power state | yes | no |
 | Type into TV text fields from the phone keyboard | yes | no |
 | Hold-to-talk voice search | yes | no |
 | App shortcuts: Netflix, TizenTube, Prime Video, Spotify | all four | Netflix, Prime Video |
 
-When Wi-Fi can't reach the TV, the power button falls back to IR automatically, so it can still turn the TV on.
+**Power when the TV is off the network.** A TCL in deep standby switches its Wi-Fi off, so it can only be turned on with infrared. When Wi-Fi can't reach the TV, a power tap goes out over IR automatically (as a quick two-frame press, like the physical remote) and the power button shows a small **IR** badge so you know. This applies to power only: every other button needs the TV on, at which point it's back on Wi-Fi and the app reconnects by itself. The same happens if the connection looks open but the TV has gone quiet (it normally pings every 5 seconds), so a TV that has just been switched off isn't sent a power press it can't hear.
 
 ### Power button
 
@@ -43,6 +44,14 @@ When Wi-Fi can't reach the TV, the power button falls back to IR automatically, 
 The app holds the key for a fixed time once a long-press is detected, however quickly you let go: 2 seconds over Wi-Fi, and about 1.9 seconds over IR (the power frame repeated back to back in a single transmission, just under Android's 2 second IR limit). On the TCL a 1.5 s hold opens the dialog, while 0.8 s counts as a normal press and puts the TV to sleep, so a short hold is not safe. While the hold runs, extra power taps and switching TV or mode are ignored for the same reason.
 
 In Wi-Fi mode the power off menu needs a live connection. It doesn't fall back to IR like a power tap does, because a TV that Wi-Fi can't reach is usually already off, and holding power over IR would switch it on.
+
+### Notification shade controls
+
+Turn on **Settings > Controls in notification shade** to get back, the arrows and OK in a notification, so you can steer the TV without leaving the app you're in. Collapsed, it's one row of buttons; expanded, it's a D-pad. It shows on the lock screen too.
+
+A small foreground service keeps the notification alive. To save battery, the Wi-Fi link to the TV stays open for 2 minutes after the last tap and then closes. The next tap reconnects (about half a second on a home network) and the key is still delivered, in order, once connected. In IR mode the buttons send infrared directly.
+
+Swiping the notification away hides it until the app is opened again; the setting turns it off for good.
 
 ### App shortcuts
 
@@ -66,7 +75,7 @@ The TizenTube button relies on stock YouTube (`com.google.android.youtube.tv`) b
 
 ### IR codes
 
-`app/src/main/kotlin/.../ir/TclIr.kt` holds the TCL keymap read from the TV itself (`/vendor/tvconfig/config/ir_config.ini`, protocol `0x07`, address `0xF`). Other TCL TVs that use the same RCA-style remote should work too. It is encoded with the same timings as Flipper Zero's RCA encoder. Unit tests check the output bit-for-bit against Flipper-IRDB captures of real TCL remotes.
+`app/src/main/kotlin/.../ir/TclIr.kt` holds the TCL keymap read from the TV itself (`/vendor/tvconfig/config/ir_config.ini`, protocol `0x07`, address `0xF`). Other TCL TVs that use the same RCA-style remote should work too. It is sent with the **RCA-38** timings that IRDB lists for TCL TVs (38 kHz carrier, 460 µs unit). Unit tests check the bits against two independent sources: Flipper-IRDB captures of real TCL remotes, and IRDB's TCL code list (26 keys match).
 
 ## Build
 
@@ -92,6 +101,16 @@ Release builds are signed with the local debug keystore for sideloading.
 
 The CLI keeps its identity in `.atv/` (git-ignored).
 
+### Testing the app without a TV
+
+`atvremote` also has a fake TV that pairs with the app and logs every key, app launch and text it receives:
+
+```sh
+./gradlew -q :atvremote:fakeTv
+```
+
+In the Android emulator, pair with the IP address `10.0.2.2` (the host PC) and type the code the fake TV prints.
+
 ## First run
 
 1. Phone and TV on the same Wi-Fi. The TV shows up automatically (mDNS `_androidtvremote2._tcp`), or you can type its IP address.
@@ -107,4 +126,4 @@ If the TV stops accepting the phone (for example after a factory reset), use **S
 
 ## Credits
 
-Protocol definitions (`polo.proto`, `remotemessage.proto`) and protocol behaviour come from [tronikos/androidtvremote2](https://github.com/tronikos/androidtvremote2) (Apache-2.0, license included next to the proto files), which builds on Google's pairing protocol and [louis49/androidtv-remote](https://github.com/louis49/androidtv-remote). The TizenTube button uses TizenTube's own launcher icon, from [reisxd/TizenTube](https://github.com/reisxd/TizenTube) (GPL-3.0, see `third_party/tizentube-icon/`). IR timings come from [Flipper Zero firmware](https://github.com/flipperdevices/flipperzero-firmware), and reference captures from [Flipper-IRDB](https://github.com/Lucaslhm/Flipper-IRDB).
+Protocol definitions (`polo.proto`, `remotemessage.proto`) and protocol behaviour come from [tronikos/androidtvremote2](https://github.com/tronikos/androidtvremote2) (Apache-2.0, license included next to the proto files), which builds on Google's pairing protocol and [louis49/androidtv-remote](https://github.com/louis49/androidtv-remote). The TizenTube button uses TizenTube's own launcher icon, from [reisxd/TizenTube](https://github.com/reisxd/TizenTube) (GPL-3.0, see `third_party/tizentube-icon/`). IR timings come from [Flipper Zero firmware](https://github.com/flipperdevices/flipperzero-firmware), reference captures from [Flipper-IRDB](https://github.com/Lucaslhm/Flipper-IRDB), and the RCA-38 definition and TCL code list from [IRDB](https://github.com/probonopd/irdb).

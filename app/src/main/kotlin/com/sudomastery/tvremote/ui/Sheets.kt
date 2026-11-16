@@ -372,7 +372,7 @@ fun SettingRow(title: String, subtitle: String, onClick: (() -> Unit)? = null, t
             .padding(vertical = 12.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
             Text(title, fontSize = 16.sp)
             Text(subtitle, fontSize = 13.sp, color = Palette.muted)
         }

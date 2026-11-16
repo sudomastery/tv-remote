@@ -2,6 +2,7 @@ package com.sudomastery.tvremote.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -68,6 +69,7 @@ import com.sudomastery.atv.proto.RemoteProto.RemoteDirection
 import com.sudomastery.tvremote.RemoteKey
 import com.sudomastery.tvremote.RemoteViewModel
 import com.sudomastery.tvremote.ir.TclIr
+import com.sudomastery.tvremote.label
 
 private enum class Sheet { NONE, KEYBOARD, MORE, DEVICES, SETTINGS }
 
@@ -82,6 +84,8 @@ fun RemoteScreen(vm: RemoteViewModel) {
     val irMode by vm.irMode.collectAsStateWithLifecycle()
     val powerMenuOpening by vm.powerMenuOpening.collectAsStateWithLifecycle()
     val notice by vm.notice.collectAsStateWithLifecycle()
+    val notificationControls by vm.notificationControls.collectAsStateWithLifecycle()
+    val powerUsesIr by vm.powerUsesIr.collectAsStateWithLifecycle()
 
     var sheet by rememberSaveable { mutableStateOf(Sheet.NONE) }
     var touchpad by rememberSaveable { mutableStateOf(false) }
@@ -106,6 +110,7 @@ fun RemoteScreen(vm: RemoteViewModel) {
                 irMode = irMode,
                 powerMenuOpening = powerMenuOpening,
                 notice = notice,
+                powerUsesIr = powerUsesIr,
                 onSettings = { sheet = Sheet.SETTINGS },
                 onDevices = { sheet = Sheet.DEVICES },
                 onPower = { press(RemoteKey.POWER) },
@@ -184,9 +189,10 @@ fun RemoteScreen(vm: RemoteViewModel) {
                 onRepair = { vm.repairCurrent(); sheet = Sheet.NONE },
                 onManageTvs = { sheet = Sheet.DEVICES },
                 extra = {
+                    NotificationControlsRow(notificationControls, vm::setNotificationControls)
                     SettingRow(
                         "Infrared mode",
-                        if (vm.irAvailable) "Use the phone's IR blaster instead of Wi-Fi. Point the phone at the TV." else "This phone has no IR blaster",
+                        if (vm.irAvailable) "Send every key over infrared. Point the phone at the TV. ${vm.irDescription}." else vm.irDescription,
                     ) {
                         Switch(irMode, vm::setIrMode, enabled = vm.irAvailable, colors = SwitchDefaults.colors(checkedTrackColor = Palette.violet))
                     }
@@ -221,6 +227,7 @@ private fun Header(
     irMode: Boolean,
     powerMenuOpening: Boolean,
     notice: String?,
+    powerUsesIr: Boolean,
     onSettings: () -> Unit,
     onDevices: () -> Unit,
     onPower: () -> Unit,
@@ -255,14 +262,35 @@ private fun Header(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        RoundKey(
-            Icons.Rounded.PowerSettingsNew, "Power. Hold for the power off menu",
-            size = 48.dp,
-            tint = if (irMode) Palette.onSurface else if (isOn == true) Palette.green else Palette.red,
-            background = Color.Transparent,
-            onLongPress = onPowerHold,
-            onPress = onPower,
-        )
+        Box {
+            RoundKey(
+                Icons.Rounded.PowerSettingsNew, if (powerUsesIr) "Power, sent over infrared. Hold for the power off menu" else "Power. Hold for the power off menu",
+                size = 48.dp,
+                // On/off is only known over Wi-Fi; when power goes out over IR, stay neutral.
+                tint = when {
+                    powerUsesIr -> Palette.onSurface
+                    isOn == true -> Palette.green
+                    else -> Palette.red
+                },
+                background = Color.Transparent,
+                onLongPress = onPowerHold,
+                onPress = onPower,
+            )
+            // Shows that a tap goes out over IR: the TV isn't reachable on Wi-Fi (or IR mode is on).
+            if (powerUsesIr) {
+                Text(
+                    "IR",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Palette.background,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .clip(RoundedCornerShape(50))
+                        .background(Palette.violet)
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                )
+            }
+        }
     }
 }
 
@@ -274,14 +302,6 @@ private fun ConnectionStatus.color() = when (this) {
     is ConnectionStatus.Unreachable -> Palette.red
 }
 
-private fun ConnectionStatus.label() = when (this) {
-    ConnectionStatus.Connected -> "Connected"
-    ConnectionStatus.Connecting -> "Connecting…"
-    ConnectionStatus.NeedsPairing -> "Needs pairing"
-    ConnectionStatus.CertificateChanged -> "Pair again"
-    ConnectionStatus.Disconnected -> "Not connected"
-    is ConnectionStatus.Unreachable -> "Can't reach TV"
-}
 
 @Composable
 private fun StatusBanner(hasTv: Boolean, status: ConnectionStatus, onFind: () -> Unit, onPair: () -> Unit, onUseIr: (() -> Unit)?) {
@@ -290,7 +310,7 @@ private fun StatusBanner(hasTv: Boolean, status: ConnectionStatus, onFind: () ->
         status == ConnectionStatus.NeedsPairing -> "The TV doesn't recognise this phone." to ("Pair" to onPair)
         status == ConnectionStatus.CertificateChanged -> "The TV's identity changed, so it needs to be paired again." to ("Pair" to onPair)
         status is ConnectionStatus.Unreachable ->
-            if (onUseIr != null) "Can't reach the TV over Wi-Fi." to ("Use IR" to onUseIr)
+            if (onUseIr != null) "TV isn't on Wi-Fi. Power will use IR to switch it on." to ("All IR" to onUseIr)
             else "Can't reach the TV. Is it on and on this Wi-Fi?" to ("TVs" to onFind)
         else -> null
     }
@@ -416,5 +436,35 @@ private fun MicKey(listening: Boolean, size: androidx.compose.ui.unit.Dp, enable
         contentAlignment = Alignment.Center,
     ) {
         Icon(Icons.Rounded.Mic, "Hold to talk", tint = Palette.onSurface, modifier = Modifier.size(size * 0.42f))
+    }
+}
+
+/** Toggle for the notification shade controls. Asks for notification permission on Android 13+. */
+@Composable
+private fun NotificationControlsRow(enabled: Boolean, onChange: (Boolean) -> Unit) {
+    val context = LocalContext.current
+    var denied by remember { mutableStateOf(false) }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        denied = !granted
+        if (granted) onChange(true)
+    }
+    SettingRow(
+        "Controls in notification shade",
+        if (denied) "Allow notifications for TV Remote in system settings to use this" else "Arrows, OK and back without leaving your app",
+    ) {
+        Switch(
+            checked = enabled,
+            onCheckedChange = { on ->
+                val needsPermission = on && Build.VERSION.SDK_INT >= 33 &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                if (needsPermission) {
+                    permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    denied = false
+                    onChange(on)
+                }
+            },
+            colors = SwitchDefaults.colors(checkedTrackColor = Palette.violet),
+        )
     }
 }
