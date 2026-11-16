@@ -24,10 +24,11 @@ To install it, open the APK on your phone and allow installs from that source wh
 
 | | Wi-Fi | IR |
 |---|---|---|
-| D-pad with hold-to-repeat, touchpad, OK long-press | yes | yes |
+| D-pad with hold-to-repeat, OK long-press | yes | yes |
 | Volume / channel rockers, mute, home, back, power | yes | yes |
 | Hold power for the TV's "Power off" (full shut down) dialog | yes | yes, untested |
 | Back, arrows and OK in the notification shade | yes | yes |
+| Advanced: close apps, free RAM, restart TV | yes (needs ADB) | no |
 | Number pad, media keys, input, guide, info, captions | yes | yes |
 | Live volume level and power state | yes | no |
 | Type into TV text fields from the phone keyboard | yes | no |
@@ -53,6 +54,20 @@ A small foreground service keeps the notification alive. To save battery, the Wi
 
 Swiping the notification away hides it until the app is opened again; the setting turns it off for good.
 
+### Advanced tab
+
+Next to the D-pad there is an **Advanced** tab for things the remote protocol can't do. It talks to the TV over network ADB (port 5555):
+
+- **Close this app**: force-stops the app on screen and returns to the launcher.
+- **Close other apps**: keeps the app on screen, closes everything else and drops cached background processes. Useful before starting something heavy on a TV with 1 GB of RAM.
+- **Close all apps**: the same, including the app on screen.
+- **Restart TV**: full reboot, after a confirmation.
+- A bar showing the TV's free memory, updated after each action.
+
+Only user-facing apps that are actually running are closed. The launcher, the keyboard and TCL, Android and Google system components are never touched.
+
+Setup: on the TV, enable **Settings > System > Developer options > Network debugging** (tap "Android TV OS build" seven times under About to reveal Developer options). The first time you use the tab, the TV asks to allow debugging from the phone: choose **Always allow**.
+
 ### App shortcuts
 
 Apps are opened with deep links that each app registers for itself, not `market://launch` links. On this TV the Play Store can't resolve `market://launch`, and the TV's remote service drops the connection when a launch fails.
@@ -70,7 +85,7 @@ The TizenTube button relies on stock YouTube (`com.google.android.youtube.tv`) b
 
 | Module | What it is |
 |---|---|
-| `atvremote/` | Pure Kotlin/JVM library for the Android TV Remote v2 protocol: pairing, the command channel, a self-signed client certificate (no BouncyCastle), and pinning of the TV certificate |
+| `atvremote/` | Pure Kotlin/JVM library for the Android TV Remote v2 protocol: pairing, the command channel, a self-signed client certificate (no BouncyCastle), and pinning of the TV certificate. Also `TvAdb`, app management over ADB |
 | `app/` | Jetpack Compose app: UI, mDNS discovery, voice capture, IR transmitter |
 
 ### IR codes
@@ -97,6 +112,7 @@ Release builds are signed with the local debug keystore for sideloading.
 ./gradlew -q :atvremote:cli --args="<tv-ip> info"
 ./gradlew -q :atvremote:cli --args="<tv-ip> key DPAD_DOWN DPAD_UP"
 ./gradlew -q :atvremote:cli --args="<tv-ip> app spotify://"
+./gradlew -q :atvremote:cli --args="<tv-ip> adb memory"         # also close-current, close-others, close-all
 ```
 
 The CLI keeps its identity in `.atv/` (git-ignored).
@@ -126,4 +142,4 @@ If the TV stops accepting the phone (for example after a factory reset), use **S
 
 ## Credits
 
-Protocol definitions (`polo.proto`, `remotemessage.proto`) and protocol behaviour come from [tronikos/androidtvremote2](https://github.com/tronikos/androidtvremote2) (Apache-2.0, license included next to the proto files), which builds on Google's pairing protocol and [louis49/androidtv-remote](https://github.com/louis49/androidtv-remote). The TizenTube button uses TizenTube's own launcher icon, from [reisxd/TizenTube](https://github.com/reisxd/TizenTube) (GPL-3.0, see `third_party/tizentube-icon/`). IR timings come from [Flipper Zero firmware](https://github.com/flipperdevices/flipperzero-firmware), reference captures from [Flipper-IRDB](https://github.com/Lucaslhm/Flipper-IRDB), and the RCA-38 definition and TCL code list from [IRDB](https://github.com/probonopd/irdb).
+Protocol definitions (`polo.proto`, `remotemessage.proto`) and protocol behaviour come from [tronikos/androidtvremote2](https://github.com/tronikos/androidtvremote2) (Apache-2.0, license included next to the proto files), which builds on Google's pairing protocol and [louis49/androidtv-remote](https://github.com/louis49/androidtv-remote). The TizenTube button uses TizenTube's own launcher icon, from [reisxd/TizenTube](https://github.com/reisxd/TizenTube) (GPL-3.0, see `third_party/tizentube-icon/`). ADB support uses [dadb](https://github.com/mobile-dev-inc/dadb) (Apache-2.0). IR timings come from [Flipper Zero firmware](https://github.com/flipperdevices/flipperzero-firmware), reference captures from [Flipper-IRDB](https://github.com/Lucaslhm/Flipper-IRDB), and the RCA-38 definition and TCL code list from [IRDB](https://github.com/probonopd/irdb).
