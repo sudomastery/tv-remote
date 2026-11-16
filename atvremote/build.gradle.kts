@@ -17,6 +17,7 @@ kotlin {
 dependencies {
     api(libs.protobuf.javalite)
     api(libs.coroutines.core)
+    implementation(libs.dadb)
     testImplementation(libs.junit)
     testImplementation(kotlin("test"))
 }

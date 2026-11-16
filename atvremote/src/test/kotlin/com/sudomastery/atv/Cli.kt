@@ -42,6 +42,18 @@ fun main(args: Array<String>) = runBlocking {
     }
 
     when (args.getOrNull(1)) {
+        // adb <memory|close-current|close-others|close-all>: uses this PC's own ADB key (~/.android)
+        "adb" -> {
+            val adb = com.sudomastery.atv.adb.TvAdb(host, File(System.getProperty("user.home"), ".android"))
+            when (args.getOrNull(2)) {
+                "memory" -> println(adb.memory())
+                "close-current" -> println(adb.closeCurrent())
+                "close-others" -> println(adb.closeOthers().let { "$it freed=${it.freedKb / 1024} MB" })
+                "close-all" -> println(adb.closeAll().let { "$it freed=${it.freedKb / 1024} MB" })
+                else -> println("usage: adb <memory|close-current|close-others|close-all>")
+            }
+        }
+
         "pair" -> PairingSession(host, identity, "TV Remote CLI").use { session ->
             session.start()
             print("Code shown on the TV: ")

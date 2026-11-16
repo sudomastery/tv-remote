@@ -10,6 +10,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sudomastery.atv.PairingSession
 import com.sudomastery.atv.WrongCodeException
+import com.sudomastery.atv.adb.CleanupResult
+import com.sudomastery.atv.adb.TvAdb
+import com.sudomastery.atv.adb.TvMemory
 import com.sudomastery.atv.proto.RemoteProto.RemoteDirection
 import com.sudomastery.tvremote.data.Discovery
 import com.sudomastery.tvremote.data.FoundTv
@@ -24,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
 
 sealed interface PairingState {
     data object Idle : PairingState
@@ -114,6 +118,57 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         store.notificationControls = enabled
         _notificationControls.value = enabled
         if (enabled) ControlsService.start(getApplication()) else ControlsService.stop(getApplication())
+    }
+
+    // endregion
+
+    // region advanced (ADB)
+
+    private val _advanced = MutableStateFlow(AdvancedState())
+    val advanced: StateFlow<AdvancedState> = _advanced.asStateFlow()
+
+    private fun adb(): TvAdb? = current.value?.let { TvAdb(it.host, File(getApplication<Application>().filesDir, "adb")) }
+
+    fun refreshMemory() {
+        val adb = adb() ?: return
+        if (_advanced.value.busy != null) return
+        viewModelScope.launch {
+            runCatching { adb.memory() }.getOrNull()?.let { _advanced.value = _advanced.value.copy(memory = it) }
+        }
+    }
+
+    fun runAction(action: TvAction) {
+        val adb = adb() ?: return
+        if (_advanced.value.busy != null) return
+        _advanced.value = _advanced.value.copy(busy = action, error = false, message = "Working… if the TV asks to allow debugging, pick Always allow")
+        viewModelScope.launch {
+            _advanced.value = try {
+                if (action == TvAction.RESTART) {
+                    // The TV drops the connection as it goes down, so an error here is expected.
+                    runCatching { adb.reboot() }
+                    _advanced.value.copy(busy = null, message = "Restarting the TV…")
+                } else {
+                    val result = when (action) {
+                        TvAction.CLOSE_CURRENT -> adb.closeCurrent()
+                        TvAction.CLOSE_OTHERS -> adb.closeOthers()
+                        else -> adb.closeAll()
+                    }
+                    AdvancedState(memory = result.after ?: _advanced.value.memory, message = result.summary())
+                }
+            } catch (e: Exception) {
+                _advanced.value.copy(busy = null, error = true, message = e.adbMessage())
+            }
+        }
+    }
+
+    private fun CleanupResult.summary(): String {
+        val names = closed.map { pkg -> AppShortcut.entries.firstOrNull { it.packageName == pkg }?.label ?: pkg.substringAfterLast('.').replaceFirstChar(Char::uppercase) }
+        val freed = (freedKb / 1024).takeIf { it > 0 }?.let { ", freed $it MB" } ?: ""
+        return when {
+            names.isEmpty() -> "Nothing to close$freed"
+            names.size <= 3 -> "Closed ${names.joinToString(", ")}$freed"
+            else -> "Closed ${names.size} apps$freed"
+        }
     }
 
     // endregion
@@ -255,6 +310,23 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 private const val HOLDER = "screen"
+
+enum class TvAction { CLOSE_CURRENT, CLOSE_OTHERS, CLOSE_ALL, RESTART }
+
+data class AdvancedState(
+    val busy: TvAction? = null,
+    val memory: TvMemory? = null,
+    val message: String? = null,
+    val error: Boolean = false,
+)
+
+private fun Exception.adbMessage(): String = when (this) {
+    is java.net.ConnectException, is java.net.NoRouteToHostException ->
+        "Can't reach ADB. On the TV: Settings > System > Developer options > Network debugging"
+    is java.net.SocketTimeoutException -> "No answer. Accept the Allow debugging prompt on the TV and try again"
+    is IllegalStateException -> message ?: "Couldn't do that"
+    else -> "Couldn't do that: ${message ?: javaClass.simpleName}"
+}
 
 private fun Exception.friendlyMessage(): String = when (this) {
     is java.net.ConnectException, is java.net.SocketTimeoutException, is java.net.NoRouteToHostException ->

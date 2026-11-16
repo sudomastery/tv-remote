@@ -88,7 +88,9 @@ fun RemoteScreen(vm: RemoteViewModel) {
     val powerUsesIr by vm.powerUsesIr.collectAsStateWithLifecycle()
 
     var sheet by rememberSaveable { mutableStateOf(Sheet.NONE) }
-    var touchpad by rememberSaveable { mutableStateOf(false) }
+    var advancedTab by rememberSaveable { mutableStateOf(false) }
+    val advanced by vm.advanced.collectAsStateWithLifecycle()
+    LaunchedEffect(advancedTab) { if (advancedTab) vm.refreshMemory() }
 
     // First run: go straight to finding a TV (unless the user only wants IR).
     LaunchedEffect(tvs.isEmpty()) { if (tvs.isEmpty() && !irMode) sheet = Sheet.DEVICES }
@@ -134,10 +136,10 @@ fun RemoteScreen(vm: RemoteViewModel) {
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 val side = minOf(maxWidth * 0.88f, maxHeight - 40.dp)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Crossfade(touchpad, label = "pad") { pad ->
+                    Crossfade(advancedTab, label = "pad") { pad ->
                         val onKey: (PadKey) -> Unit = { k -> press(k.toRemoteKey()) }
                         if (pad) {
-                            Touchpad(onKey, Modifier.size(side))
+                            AdvancedPanel(advanced, enabled = !irMode && current != null, onAction = vm::runAction, modifier = Modifier.size(side))
                         } else {
                             DPad(
                                 onKey = onKey,
@@ -148,7 +150,7 @@ fun RemoteScreen(vm: RemoteViewModel) {
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    PadSwitch(touchpad) { touchpad = it }
+                    PadSwitch(advancedTab) { advancedTab = it }
                 }
             }
 
@@ -334,7 +336,7 @@ private fun StatusBanner(hasTv: Boolean, status: ConnectionStatus, onFind: () ->
 }
 
 @Composable
-private fun PadSwitch(touchpad: Boolean, onChange: (Boolean) -> Unit) = Segmented(touchpad, "D-pad", "Touchpad", onChange)
+private fun PadSwitch(advanced: Boolean, onChange: (Boolean) -> Unit) = Segmented(advanced, "D-pad", "Advanced", onChange)
 
 @Composable
 private fun ModeSwitch(ir: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) =
